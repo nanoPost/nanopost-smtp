@@ -2,7 +2,7 @@
 /**
  * Plugin Name: nanoPost
  * Description: Zero-config email delivery for WordPress
- * Version: 0.3.2
+ * Version: 0.4.0
  * Author: nanoPost
  */
 
@@ -11,9 +11,10 @@ defined('ABSPATH') || exit;
 define('NANOPOST_API_BASE', 'https://api-master-ja5zao.laravel.cloud/api');
 
 /**
- * REST API endpoint for domain verification
+ * REST API endpoints for verification
  */
 add_action('rest_api_init', function () {
+    // Domain verification (Stage 3)
     register_rest_route('nanopost/v1', '/verify', [
         'methods' => 'GET',
         'callback' => function ($request) {
@@ -35,6 +36,55 @@ add_action('rest_api_init', function () {
         },
         'permission_callback' => '__return_true',
     ]);
+
+    // Recipient verification (Stage 5) - HMAC protected
+    register_rest_route('nanopost/v1', '/verify-recipient', [
+        'methods' => 'GET',
+        'callback' => function ($request) {
+            $email = $request->get_param('email');
+            $timestamp = $request->get_param('timestamp');
+            $signature = $request->get_param('signature');
+            $site_secret = get_option('nanopost_site_secret');
+
+            // Prevent caching
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+            header('Pragma: no-cache');
+
+            // Verify signature exists
+            if (empty($signature) || empty($timestamp) || empty($site_secret)) {
+                return new WP_Error('forbidden', 'Forbidden', ['status' => 403]);
+            }
+
+            // Check timestamp (within 5 minutes)
+            if (abs(time() - intval($timestamp)) > 300) {
+                return new WP_Error('forbidden', 'Forbidden', ['status' => 403]);
+            }
+
+            // Verify HMAC signature
+            $expected = hash_hmac('sha256', $email . $timestamp, $site_secret);
+            if (!hash_equals($expected, $signature)) {
+                return new WP_Error('forbidden', 'Forbidden', ['status' => 403]);
+            }
+
+            // Signature valid - now check recipient
+            if (empty($email) || !is_email($email)) {
+                return ['allowed' => false, 'reason' => 'Invalid email'];
+            }
+
+            // Check if email belongs to a WP user
+            if (email_exists($email)) {
+                return ['allowed' => true, 'reason' => 'WordPress user'];
+            }
+
+            // Check if it's the admin email
+            if ($email === get_option('admin_email')) {
+                return ['allowed' => true, 'reason' => 'Admin email'];
+            }
+
+            return ['allowed' => false, 'reason' => 'Not a WordPress user'];
+        },
+        'permission_callback' => '__return_true',
+    ]);
 });
 
 /**
@@ -42,6 +92,11 @@ add_action('rest_api_init', function () {
  * (Actual registration happens after init when REST API is available)
  */
 register_activation_hook(__FILE__, function () {
+    // Generate site_secret if not exists
+    if (!get_option('nanopost_site_secret')) {
+        update_option('nanopost_site_secret', bin2hex(random_bytes(32)));
+    }
+
     if (!get_option('nanopost_site_token')) {
         update_option('nanopost_needs_registration', true);
     }
@@ -58,12 +113,18 @@ add_action('init', function () {
     // Clear the flag first to prevent repeated attempts
     delete_option('nanopost_needs_registration');
 
+    // Ensure site_secret exists
+    if (!get_option('nanopost_site_secret')) {
+        update_option('nanopost_site_secret', bin2hex(random_bytes(32)));
+    }
+
     $response = wp_remote_post(NANOPOST_API_BASE . '/register', [
         'timeout' => 30,
         'headers' => ['Content-Type' => 'application/json'],
         'body' => json_encode([
             'domain' => site_url(),
             'admin_email' => get_option('admin_email'),
+            'site_secret' => get_option('nanopost_site_secret'),
         ]),
     ]);
 
@@ -145,12 +206,16 @@ function nanopost_settings_page() {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && check_admin_referer('nanopost_settings')) {
         // Handle re-registration request
         if (isset($_POST['nanopost_register'])) {
+            // Generate new site_secret on re-registration
+            update_option('nanopost_site_secret', bin2hex(random_bytes(32)));
+
             $response = wp_remote_post(NANOPOST_API_BASE . '/register', [
                 'timeout' => 30,
                 'headers' => ['Content-Type' => 'application/json'],
                 'body' => json_encode([
                     'domain' => site_url(),
                     'admin_email' => get_option('admin_email'),
+                    'site_secret' => get_option('nanopost_site_secret'),
                 ]),
             ]);
 
