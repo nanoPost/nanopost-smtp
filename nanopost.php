@@ -2,11 +2,41 @@
 /**
  * Plugin Name: nanoPost
  * Description: Zero-config email delivery for WordPress
- * Version: 0.1.2
+ * Version: 0.2.0
  * Author: nanoPost
  */
 
 defined('ABSPATH') || exit;
+
+define('NANOPOST_API_BASE', 'https://api-master-ja5zao.laravel.cloud/api');
+
+/**
+ * Auto-register with nanoPost API on plugin activation
+ */
+register_activation_hook(__FILE__, function () {
+    // Skip if already registered
+    if (get_option('nanopost_site_token')) {
+        return;
+    }
+
+    $response = wp_remote_post(NANOPOST_API_BASE . '/register', [
+        'timeout' => 30,
+        'headers' => ['Content-Type' => 'application/json'],
+        'body' => json_encode([
+            'domain' => site_url(),
+            'admin_email' => get_option('admin_email'),
+        ]),
+    ]);
+
+    if (!is_wp_error($response)) {
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        if (!empty($body['site_token'])) {
+            update_option('nanopost_site_token', $body['site_token']);
+            update_option('nanopost_site_id', $body['site_id']);
+            update_option('nanopost_api_url', NANOPOST_API_BASE . '/mail');
+        }
+    }
+});
 
 /**
  * Hijack wp_mail() and send via nanoPost API
@@ -74,12 +104,30 @@ function nanopost_settings_page() {
 
     // Handle form submission
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && check_admin_referer('nanopost_settings')) {
-        // Always save settings
-        update_option('nanopost_site_token', sanitize_text_field($_POST['nanopost_site_token'] ?? ''));
-        update_option('nanopost_api_url', esc_url_raw($_POST['nanopost_api_url'] ?? ''));
+        // Handle re-registration request
+        if (isset($_POST['nanopost_register'])) {
+            $response = wp_remote_post(NANOPOST_API_BASE . '/register', [
+                'timeout' => 30,
+                'headers' => ['Content-Type' => 'application/json'],
+                'body' => json_encode([
+                    'domain' => site_url(),
+                    'admin_email' => get_option('admin_email'),
+                ]),
+            ]);
 
-        if (isset($_POST['nanopost_save'])) {
-            echo '<div class="notice notice-success"><p>Settings saved.</p></div>';
+            if (!is_wp_error($response)) {
+                $body = json_decode(wp_remote_retrieve_body($response), true);
+                if (!empty($body['site_token'])) {
+                    update_option('nanopost_site_token', $body['site_token']);
+                    update_option('nanopost_site_id', $body['site_id']);
+                    update_option('nanopost_api_url', NANOPOST_API_BASE . '/mail');
+                    echo '<div class="notice notice-success"><p>Registered successfully!</p></div>';
+                } else {
+                    echo '<div class="notice notice-error"><p>Registration failed: ' . esc_html($body['error'] ?? 'Unknown error') . '</p></div>';
+                }
+            } else {
+                echo '<div class="notice notice-error"><p>Registration failed: ' . esc_html($response->get_error_message()) . '</p></div>';
+            }
         }
 
         // Send test email if requested
@@ -95,29 +143,50 @@ function nanopost_settings_page() {
     }
 
     $site_token = get_option('nanopost_site_token', '');
-    $api_url = get_option('nanopost_api_url', 'https://api-master-ja5zao.laravel.cloud/api/mail');
+    $site_id = get_option('nanopost_site_id', '');
     ?>
     <div class="wrap">
         <h1>nanoPost Settings</h1>
+
+        <h2>Registration Status</h2>
         <form method="post">
             <?php wp_nonce_field('nanopost_settings'); ?>
             <table class="form-table">
                 <tr>
-                    <th><label for="nanopost_site_token">Site Token</label></th>
+                    <th>Status</th>
                     <td>
-                        <input type="text" id="nanopost_site_token" name="nanopost_site_token"
-                               value="<?php echo esc_attr($site_token); ?>" class="regular-text">
+                        <?php if ($site_token): ?>
+                            <span style="color: green; font-weight: bold;">Registered</span>
+                        <?php else: ?>
+                            <span style="color: red; font-weight: bold;">Not registered</span>
+                        <?php endif; ?>
                     </td>
                 </tr>
+                <?php if ($site_id): ?>
                 <tr>
-                    <th><label for="nanopost_api_url">API URL</label></th>
+                    <th>Site ID</th>
+                    <td><code><?php echo esc_html($site_id); ?></code></td>
+                </tr>
+                <?php endif; ?>
+                <tr>
+                    <th></th>
                     <td>
-                        <input type="url" id="nanopost_api_url" name="nanopost_api_url"
-                               value="<?php echo esc_attr($api_url); ?>" class="regular-text">
+                        <input type="submit" name="nanopost_register" class="button"
+                               value="<?php echo $site_token ? 'Re-register' : 'Register Now'; ?>">
+                        <p class="description">
+                            <?php echo $site_token ? 'Generate a new token (invalidates old one)' : 'Connect this site to nanoPost'; ?>
+                        </p>
                     </td>
                 </tr>
+            </table>
+        </form>
+
+        <h2>Test Email</h2>
+        <form method="post">
+            <?php wp_nonce_field('nanopost_settings'); ?>
+            <table class="form-table">
                 <tr>
-                    <th><label for="nanopost_test_email">Test Email</label></th>
+                    <th><label for="nanopost_test_email">Send To</label></th>
                     <td>
                         <input type="email" id="nanopost_test_email" name="nanopost_test_email"
                                placeholder="your@email.com" class="regular-text">
@@ -125,9 +194,6 @@ function nanopost_settings_page() {
                     </td>
                 </tr>
             </table>
-            <p class="submit">
-                <input type="submit" name="nanopost_save" class="button-primary" value="Save Settings">
-            </p>
         </form>
     </div>
     <?php
