@@ -2,7 +2,7 @@
 /**
  * Plugin Name: nanoPost
  * Description: Zero-config email delivery for WordPress
- * Version: 0.3.1
+ * Version: 0.3.2
  * Author: nanoPost
  */
 
@@ -38,13 +38,25 @@ add_action('rest_api_init', function () {
 });
 
 /**
- * Auto-register with nanoPost API on plugin activation
+ * Schedule registration on plugin activation
+ * (Actual registration happens after init when REST API is available)
  */
 register_activation_hook(__FILE__, function () {
-    // Skip if already registered
-    if (get_option('nanopost_site_token')) {
+    if (!get_option('nanopost_site_token')) {
+        update_option('nanopost_needs_registration', true);
+    }
+});
+
+/**
+ * Auto-register with nanoPost API (runs after init)
+ */
+add_action('init', function () {
+    if (!get_option('nanopost_needs_registration')) {
         return;
     }
+
+    // Clear the flag first to prevent repeated attempts
+    delete_option('nanopost_needs_registration');
 
     $response = wp_remote_post(NANOPOST_API_BASE . '/register', [
         'timeout' => 30,
