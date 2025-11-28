@@ -72,11 +72,26 @@ function nanopost_settings_page() {
         return;
     }
 
-    // Save settings
-    if (isset($_POST['nanopost_save']) && check_admin_referer('nanopost_settings')) {
-        update_option('nanopost_site_token', sanitize_text_field($_POST['nanopost_site_token']));
-        update_option('nanopost_api_url', esc_url_raw($_POST['nanopost_api_url']));
-        echo '<div class="notice notice-success"><p>Settings saved.</p></div>';
+    // Handle form submission
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && check_admin_referer('nanopost_settings')) {
+        // Always save settings
+        update_option('nanopost_site_token', sanitize_text_field($_POST['nanopost_site_token'] ?? ''));
+        update_option('nanopost_api_url', esc_url_raw($_POST['nanopost_api_url'] ?? ''));
+
+        if (isset($_POST['nanopost_save'])) {
+            echo '<div class="notice notice-success"><p>Settings saved.</p></div>';
+        }
+
+        // Send test email if requested
+        if (isset($_POST['nanopost_test']) && !empty($_POST['nanopost_test_email'])) {
+            $test_to = sanitize_email($_POST['nanopost_test_email']);
+            $result = wp_mail($test_to, 'nanoPost Test', 'This is a test email from nanoPost.');
+            if ($result) {
+                echo '<div class="notice notice-success"><p>Test email sent to ' . esc_html($test_to) . '</p></div>';
+            } else {
+                echo '<div class="notice notice-error"><p>Failed to send test email. Check error log.</p></div>';
+            }
+        }
     }
 
     $site_token = get_option('nanopost_site_token', '');
@@ -101,30 +116,17 @@ function nanopost_settings_page() {
                                value="<?php echo esc_attr($api_url); ?>" class="regular-text">
                     </td>
                 </tr>
+                <tr>
+                    <th><label for="nanopost_test_email">Test Email</label></th>
+                    <td>
+                        <input type="email" id="nanopost_test_email" name="nanopost_test_email"
+                               placeholder="your@email.com" class="regular-text">
+                        <input type="submit" name="nanopost_test" class="button" value="Send Test Email">
+                    </td>
+                </tr>
             </table>
             <p class="submit">
                 <input type="submit" name="nanopost_save" class="button-primary" value="Save Settings">
-            </p>
-        </form>
-
-        <hr>
-        <h2>Test Email</h2>
-        <?php
-        if (isset($_POST['nanopost_test']) && check_admin_referer('nanopost_settings')) {
-            $test_to = sanitize_email($_POST['nanopost_test_email']);
-            $result = wp_mail($test_to, 'nanoPost Test', 'This is a test email from nanoPost.');
-            if ($result) {
-                echo '<div class="notice notice-success"><p>Test email sent to ' . esc_html($test_to) . '</p></div>';
-            } else {
-                echo '<div class="notice notice-error"><p>Failed to send test email. Check error log.</p></div>';
-            }
-        }
-        ?>
-        <form method="post">
-            <?php wp_nonce_field('nanopost_settings'); ?>
-            <p>
-                <input type="email" name="nanopost_test_email" placeholder="your@email.com" class="regular-text">
-                <input type="submit" name="nanopost_test" class="button" value="Send Test Email">
             </p>
         </form>
     </div>
