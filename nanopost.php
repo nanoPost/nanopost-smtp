@@ -139,6 +139,67 @@ add_action('init', function () {
 });
 
 /**
+ * Parse wp_mail headers (string or array) into associative array
+ */
+function nanopost_parse_headers($headers) {
+    $parsed = [
+        'from' => '',
+        'from_name' => '',
+        'reply_to' => '',
+        'cc' => [],
+        'bcc' => [],
+        'content_type' => 'text/plain',
+    ];
+
+    if (empty($headers)) {
+        return $parsed;
+    }
+
+    // Convert string headers to array
+    if (!is_array($headers)) {
+        $headers = explode("\n", str_replace("\r\n", "\n", $headers));
+    }
+
+    foreach ($headers as $header) {
+        if (strpos($header, ':') === false) {
+            continue;
+        }
+
+        list($name, $value) = explode(':', $header, 2);
+        $name = strtolower(trim($name));
+        $value = trim($value);
+
+        switch ($name) {
+            case 'from':
+                // Parse "Name <email>" or just "email"
+                if (preg_match('/^(.+?)\s*<(.+?)>$/', $value, $matches)) {
+                    $parsed['from_name'] = trim($matches[1], ' "\'');
+                    $parsed['from'] = $matches[2];
+                } else {
+                    $parsed['from'] = $value;
+                }
+                break;
+            case 'reply-to':
+                $parsed['reply_to'] = $value;
+                break;
+            case 'cc':
+                $parsed['cc'][] = $value;
+                break;
+            case 'bcc':
+                $parsed['bcc'][] = $value;
+                break;
+            case 'content-type':
+                if (stripos($value, 'text/html') !== false) {
+                    $parsed['content_type'] = 'text/html';
+                }
+                break;
+        }
+    }
+
+    return $parsed;
+}
+
+/**
  * Hijack wp_mail() and send via nanoPost API
  */
 add_filter('pre_wp_mail', function ($null, $atts) {
@@ -153,20 +214,48 @@ add_filter('pre_wp_mail', function ($null, $atts) {
     // Handle recipient (can be string or array)
     $to = is_array($atts['to']) ? implode(',', $atts['to']) : $atts['to'];
 
+    // Parse headers
+    $headers = nanopost_parse_headers($atts['headers'] ?? []);
+
+    // Build payload
+    $payload = [
+        'site_token' => $site_token,
+        'site_url' => site_url(),
+        'to' => $to,
+        'subject' => $atts['subject'] ?? '(no subject)',
+        'message' => $atts['message'] ?? '',
+        'content_type' => $headers['content_type'],
+        'from_name' => get_bloginfo('name'),
+    ];
+
+    // Include original from address (will become reply-to on API side)
+    if (!empty($headers['from'])) {
+        $payload['original_from'] = $headers['from'];
+        if (!empty($headers['from_name'])) {
+            $payload['original_from_name'] = $headers['from_name'];
+        }
+    }
+
+    // Include reply-to if explicitly set
+    if (!empty($headers['reply_to'])) {
+        $payload['reply_to'] = $headers['reply_to'];
+    }
+
+    // Include CC/BCC if present
+    if (!empty($headers['cc'])) {
+        $payload['cc'] = implode(',', $headers['cc']);
+    }
+    if (!empty($headers['bcc'])) {
+        $payload['bcc'] = implode(',', $headers['bcc']);
+    }
+
     $response = wp_remote_post($api_url, [
         'timeout' => 30,
         'headers' => [
             'Content-Type' => 'application/json',
             'Accept' => 'application/json',
         ],
-        'body' => json_encode([
-            'site_token' => $site_token,
-            'site_url' => site_url(),
-            'to' => $to,
-            'subject' => ($atts['subject'] ?? '(no subject)') . ' [' . substr(md5(time()), 0, 6) . ']',
-            'message' => $atts['message'] ?? '',
-            'from_name' => get_bloginfo('name'),
-        ]),
+        'body' => json_encode($payload),
     ]);
 
     if (is_wp_error($response)) {
