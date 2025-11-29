@@ -13,6 +13,11 @@ defined('ABSPATH') || exit;
 
 define('NANOPOST_API_BASE', 'https://api-master-ja5zao.laravel.cloud/api');
 
+// Load WP-CLI commands
+if (defined('WP_CLI') && WP_CLI) {
+    require_once __DIR__ . '/cli.php';
+}
+
 /**
  * Debug logging - only logs when debug mode is enabled
  */
