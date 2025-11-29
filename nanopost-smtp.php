@@ -310,6 +310,7 @@ add_filter('pre_wp_mail', function ($null, $atts) {
     }
 
     nanopost_debug("Sending to API: {$api_url}");
+    nanopost_debug("Payload: " . json_encode($payload));
 
     $response = wp_remote_post($api_url, [
         'timeout' => 30,
@@ -323,21 +324,24 @@ add_filter('pre_wp_mail', function ($null, $atts) {
     if (is_wp_error($response)) {
         error_log('nanoPost: API error - ' . $response->get_error_message());
         nanopost_debug("API request failed: " . $response->get_error_message());
+        nanopost_debug("=== MAIL SEND FAILED (WP error) ===");
         return false;
     }
 
     $status_code = wp_remote_retrieve_response_code($response);
-    $body = json_decode(wp_remote_retrieve_body($response), true);
+    $raw_body = wp_remote_retrieve_body($response);
+    $body = json_decode($raw_body, true);
 
-    nanopost_debug("API response: HTTP {$status_code}");
+    nanopost_debug("Response HTTP status: {$status_code}");
+    nanopost_debug("Response body: {$raw_body}");
 
     if (!empty($body['success'])) {
-        nanopost_debug("Email sent successfully");
+        nanopost_debug("=== MAIL SEND SUCCESS ===");
         return true;
     }
 
-    error_log('nanoPost: API returned error - ' . json_encode($body));
-    nanopost_debug("API rejected: " . json_encode($body));
+    error_log('nanoPost: API returned error - ' . $raw_body);
+    nanopost_debug("=== MAIL SEND FAILED (API rejected) ===");
     return false;
 }, 10, 2);
 
@@ -424,10 +428,19 @@ function nanopost_settings_page() {
         // Send test email if requested
         if (isset($_POST['nanopost_test']) && !empty($_POST['nanopost_test_email'])) {
             $test_to = sanitize_email($_POST['nanopost_test_email']);
+
+            nanopost_debug("=== TEST EMAIL START ===");
+            nanopost_debug("Recipient: {$test_to}");
+            nanopost_debug("Site token configured: " . (get_option('nanopost_site_token') ? 'yes' : 'NO'));
+            nanopost_debug("API URL: " . get_option('nanopost_api_url', '(not set)'));
+
             $result = wp_mail($test_to, 'nanoPost Test', 'This is a test email from nanoPost.');
+
             if ($result) {
+                nanopost_debug("=== TEST EMAIL SUCCESS ===");
                 echo '<div class="notice notice-success"><p>Test email sent to ' . esc_html($test_to) . '</p></div>';
             } else {
+                nanopost_debug("=== TEST EMAIL FAILED ===");
                 echo '<div class="notice notice-error"><p>Failed to send test email. Check error log.</p></div>';
             }
         }
