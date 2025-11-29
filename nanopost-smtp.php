@@ -1,9 +1,12 @@
 <?php
 /**
- * Plugin Name: nanoPost
+ * Plugin Name: nanoPost SMTP
+ * Plugin URI: https://nanopo.st
  * Description: Zero-config email delivery for WordPress
- * Version: 0.4.0
+ * Version: 0.5.0
  * Author: nanoPost
+ * Author URI: https://nanopo.st
+ * Text Domain: nanopost-smtp
  */
 
 defined('ABSPATH') || exit;
