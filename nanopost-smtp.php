@@ -133,43 +133,57 @@ add_action('init', function () {
         return;
     }
 
-    nanopost_debug("Auto-registration triggered");
+    nanopost_debug("=== AUTO-REGISTRATION START ===");
 
     // Clear the flag first to prevent repeated attempts
     delete_option('nanopost_needs_registration');
 
     // Ensure site_secret exists
-    if (!get_option('nanopost_site_secret')) {
-        update_option('nanopost_site_secret', bin2hex(random_bytes(32)));
-        nanopost_debug("Generated new site_secret");
+    $site_secret = get_option('nanopost_site_secret');
+    if (!$site_secret) {
+        $site_secret = bin2hex(random_bytes(32));
+        update_option('nanopost_site_secret', $site_secret);
+        nanopost_debug("Generated new site_secret: " . substr($site_secret, 0, 10) . "...");
     }
 
-    $domain = site_url();
-    nanopost_debug("Registering domain: {$domain}");
+    $request_payload = [
+        'domain' => site_url(),
+        'admin_email' => get_option('admin_email'),
+        'site_secret' => $site_secret,
+    ];
+
+    nanopost_debug("Request URL: " . NANOPOST_API_BASE . '/register');
+    nanopost_debug("Request payload: " . json_encode($request_payload));
 
     $response = wp_remote_post(NANOPOST_API_BASE . '/register', [
         'timeout' => 30,
         'headers' => ['Content-Type' => 'application/json'],
-        'body' => json_encode([
-            'domain' => $domain,
-            'admin_email' => get_option('admin_email'),
-            'site_secret' => get_option('nanopost_site_secret'),
-        ]),
+        'body' => json_encode($request_payload),
     ]);
 
     if (is_wp_error($response)) {
-        nanopost_debug("Registration failed: " . $response->get_error_message());
+        nanopost_debug("Response error: " . $response->get_error_message());
+        nanopost_debug("=== AUTO-REGISTRATION FAILED (WP error) ===");
         return;
     }
 
-    $body = json_decode(wp_remote_retrieve_body($response), true);
+    $status_code = wp_remote_retrieve_response_code($response);
+    $raw_body = wp_remote_retrieve_body($response);
+    $body = json_decode($raw_body, true);
+
+    nanopost_debug("Response HTTP status: {$status_code}");
+    nanopost_debug("Response body: {$raw_body}");
+
     if (!empty($body['site_token'])) {
         update_option('nanopost_site_token', $body['site_token']);
         update_option('nanopost_site_id', $body['site_id']);
         update_option('nanopost_api_url', NANOPOST_API_BASE . '/mail');
-        nanopost_debug("Registration successful: site_id={$body['site_id']}");
+
+        nanopost_debug("New site_id: {$body['site_id']}");
+        nanopost_debug("New site_token: " . substr($body['site_token'], 0, 10) . "...");
+        nanopost_debug("=== AUTO-REGISTRATION SUCCESS ===");
     } else {
-        nanopost_debug("Registration failed: " . json_encode($body));
+        nanopost_debug("=== AUTO-REGISTRATION FAILED (no token in response) ===");
     }
 });
 
@@ -349,30 +363,60 @@ function nanopost_settings_page() {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && check_admin_referer('nanopost_settings')) {
         // Handle re-registration request
         if (isset($_POST['nanopost_register'])) {
+            // Store previous values for debugging
+            $old_site_id = get_option('nanopost_site_id', '(none)');
+            $old_site_token = get_option('nanopost_site_token', '(none)');
+
+            nanopost_debug("=== REGISTRATION START ===");
+            nanopost_debug("Previous site_id: {$old_site_id}");
+            nanopost_debug("Previous site_token: " . substr($old_site_token, 0, 10) . "...");
+
             // Generate new site_secret on re-registration
-            update_option('nanopost_site_secret', bin2hex(random_bytes(32)));
+            $new_secret = bin2hex(random_bytes(32));
+            update_option('nanopost_site_secret', $new_secret);
+            nanopost_debug("Generated new site_secret: " . substr($new_secret, 0, 10) . "...");
+
+            $request_payload = [
+                'domain' => site_url(),
+                'admin_email' => get_option('admin_email'),
+                'site_secret' => $new_secret,
+            ];
+
+            nanopost_debug("Request URL: " . NANOPOST_API_BASE . '/register');
+            nanopost_debug("Request payload: " . json_encode($request_payload));
 
             $response = wp_remote_post(NANOPOST_API_BASE . '/register', [
                 'timeout' => 30,
                 'headers' => ['Content-Type' => 'application/json'],
-                'body' => json_encode([
-                    'domain' => site_url(),
-                    'admin_email' => get_option('admin_email'),
-                    'site_secret' => get_option('nanopost_site_secret'),
-                ]),
+                'body' => json_encode($request_payload),
             ]);
 
             if (!is_wp_error($response)) {
-                $body = json_decode(wp_remote_retrieve_body($response), true);
+                $status_code = wp_remote_retrieve_response_code($response);
+                $raw_body = wp_remote_retrieve_body($response);
+                $body = json_decode($raw_body, true);
+
+                nanopost_debug("Response HTTP status: {$status_code}");
+                nanopost_debug("Response body: {$raw_body}");
+
                 if (!empty($body['site_token'])) {
                     update_option('nanopost_site_token', $body['site_token']);
                     update_option('nanopost_site_id', $body['site_id']);
                     update_option('nanopost_api_url', NANOPOST_API_BASE . '/mail');
+
+                    nanopost_debug("New site_id: {$body['site_id']}");
+                    nanopost_debug("New site_token: " . substr($body['site_token'], 0, 10) . "...");
+                    nanopost_debug("Updated flag: " . ($body['updated'] ?? 'false'));
+                    nanopost_debug("=== REGISTRATION SUCCESS ===");
+
                     echo '<div class="notice notice-success"><p>Registered successfully!</p></div>';
                 } else {
+                    nanopost_debug("=== REGISTRATION FAILED (no token in response) ===");
                     echo '<div class="notice notice-error"><p>Registration failed: ' . esc_html($body['error'] ?? 'Unknown error') . '</p></div>';
                 }
             } else {
+                nanopost_debug("Response error: " . $response->get_error_message());
+                nanopost_debug("=== REGISTRATION FAILED (WP error) ===");
                 echo '<div class="notice notice-error"><p>Registration failed: ' . esc_html($response->get_error_message()) . '</p></div>';
             }
         }
