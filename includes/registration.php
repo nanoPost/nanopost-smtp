@@ -114,6 +114,65 @@ function nanopost_register_site($regenerate_secret = false) {
 }
 
 /**
+ * Verify API callback (round-trip verification).
+ *
+ * Asks the nanoPost API to call back to this site's verify endpoint,
+ * confirming that the API can reach this WordPress installation.
+ *
+ * @return array Result with 'success' boolean and 'error'/'details' keys on failure.
+ */
+function nanopost_verify_callback() {
+    $site_token = get_option('nanopost_site_token');
+
+    if (empty($site_token)) {
+        return [
+            'success' => false,
+            'error' => 'Not registered',
+        ];
+    }
+
+    $request_payload = [
+        'site_token' => $site_token,
+    ];
+
+    nanopost_debug("Request URL: " . NANOPOST_API_BASE . '/site/verify-callback');
+
+    $response = wp_remote_post(NANOPOST_API_BASE . '/site/verify-callback', [
+        'timeout' => 30,
+        'headers' => ['Content-Type' => 'application/json'],
+        'body' => json_encode($request_payload),
+    ]);
+
+    if (is_wp_error($response)) {
+        nanopost_debug("Response error: " . $response->get_error_message());
+        return [
+            'success' => false,
+            'error' => $response->get_error_message(),
+        ];
+    }
+
+    $status_code = wp_remote_retrieve_response_code($response);
+    $raw_body = wp_remote_retrieve_body($response);
+    $body = json_decode($raw_body, true);
+
+    nanopost_debug("Response HTTP status: {$status_code}");
+    nanopost_debug("Response body: {$raw_body}");
+
+    if ($status_code === 200 && !empty($body['success'])) {
+        return [
+            'success' => true,
+            'data' => $body,
+        ];
+    }
+
+    return [
+        'success' => false,
+        'error' => $body['error'] ?? 'Verification failed',
+        'details' => $body['details'] ?? null,
+    ];
+}
+
+/**
  * Update domain with nanoPost API.
  *
  * @return array Result with 'success' boolean and 'error' or 'data' keys.

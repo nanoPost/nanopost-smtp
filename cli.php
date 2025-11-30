@@ -17,9 +17,15 @@ class NanoPost_CLI {
     /**
      * Show nanoPost registration status.
      *
+     * ## OPTIONS
+     *
+     * [--verify]
+     * : Perform round-trip verification with nanoPost API.
+     *
      * ## EXAMPLES
      *
      *     wp nanopost status
+     *     wp nanopost status --verify
      *
      * @when after_wp_load
      */
@@ -41,6 +47,24 @@ class NanoPost_CLI {
             WP_CLI::success('Plugin is registered.');
         } else {
             WP_CLI::warning('Plugin is not registered. Run: wp nanopost register');
+            return;
+        }
+
+        // Perform round-trip verification if requested
+        $verify = WP_CLI\Utils\get_flag_value($assoc_args, 'verify', false);
+        if ($verify) {
+            WP_CLI::log('');
+            WP_CLI::log('Verifying API callback...');
+            $result = nanopost_verify_callback();
+
+            if ($result['success']) {
+                WP_CLI::success('API can reach this site (round-trip verified)');
+            } else {
+                WP_CLI::warning('API callback failed: ' . $result['error']);
+                if (!empty($result['details'])) {
+                    WP_CLI::log('Details: ' . $result['details']);
+                }
+            }
         }
     }
 
