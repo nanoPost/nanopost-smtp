@@ -93,14 +93,15 @@ add_action('admin_init', function () {
  * Handle domain notice actions.
  */
 add_action('admin_init', function () {
-    if (!isset($_GET['page']) || $_GET['page'] !== 'nanopost') {
+    if (!isset($_GET['page']) || sanitize_text_field($_GET['page']) !== 'nanopost') {
         return;
     }
 
-    $action = $_GET['action'] ?? '';
+    $action = isset($_GET['action']) ? sanitize_text_field($_GET['action']) : '';
 
     // Handle dismiss
-    if ($action === 'dismiss-domain-notice' && wp_verify_nonce($_GET['_wpnonce'] ?? '', 'nanopost_dismiss_notice')) {
+    $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field($_GET['_wpnonce']) : '';
+    if ($action === 'dismiss-domain-notice' && wp_verify_nonce($nonce, 'nanopost_dismiss_notice')) {
         update_option('nanopost_domain_notice_dismissed', time() + (7 * DAY_IN_SECONDS));
         wp_redirect(admin_url('options-general.php?page=nanopost'));
         exit;
@@ -138,7 +139,7 @@ function nanopost_settings_page() {
     $site_token = get_option('nanopost_site_token', '');
     $site_id = get_option('nanopost_site_id', '');
     $registered_domain = get_option('nanopost_registered_domain', '');
-    $is_welcome = isset($_GET['welcome']) && $_GET['welcome'] === '1';
+    $is_welcome = isset($_GET['welcome']) && sanitize_text_field($_GET['welcome']) === '1';
     ?>
     <div class="wrap">
         <h1>nanoPost Settings</h1>
