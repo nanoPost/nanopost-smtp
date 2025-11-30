@@ -69,46 +69,18 @@ class NanoPost_CLI {
         }
 
         WP_CLI::log('Registering with nanoPost API...');
+        WP_CLI::log('Domain: ' . site_url());
+        WP_CLI::log('Admin Email: ' . get_option('admin_email'));
 
-        // Generate new site_secret
-        $site_secret = bin2hex(random_bytes(32));
-        update_option('nanopost_site_secret', $site_secret);
+        $result = nanopost_register_site($force);
 
-        $payload = [
-            'domain' => site_url(),
-            'admin_email' => get_option('admin_email'),
-            'site_secret' => $site_secret,
-        ];
-
-        WP_CLI::log('Domain: ' . $payload['domain']);
-        WP_CLI::log('Admin Email: ' . $payload['admin_email']);
-
-        $response = wp_remote_post(NANOPOST_API_BASE . '/register', [
-            'headers' => ['Content-Type' => 'application/json'],
-            'body' => json_encode($payload),
-            'timeout' => 30,
-        ]);
-
-        if (is_wp_error($response)) {
-            WP_CLI::error('Request failed: ' . $response->get_error_message());
-            return;
+        if ($result['success']) {
+            $updated = !empty($result['data']['updated']) ? ' (re-registered)' : '';
+            WP_CLI::success('Registered successfully' . $updated);
+            WP_CLI::log('Site ID: ' . $result['data']['site_id']);
+        } else {
+            WP_CLI::error('Registration failed: ' . $result['error']);
         }
-
-        $status = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-
-        if ($status !== 200 || empty($body['site_token'])) {
-            WP_CLI::error('Registration failed (HTTP ' . $status . '): ' . json_encode($body));
-            return;
-        }
-
-        update_option('nanopost_site_id', $body['site_id']);
-        update_option('nanopost_site_token', $body['site_token']);
-        delete_option('nanopost_needs_registration');
-
-        $updated = !empty($body['updated']) ? ' (re-registered)' : '';
-        WP_CLI::success('Registered successfully' . $updated);
-        WP_CLI::log('Site ID: ' . $body['site_id']);
     }
 
     /**
