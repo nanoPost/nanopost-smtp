@@ -137,6 +137,12 @@ When enabled, logs are written to `wp-content/debug.log`.
 
 No. Your site is automatically registered when you activate the plugin.
 
+### I'm developing locally - will this work?
+
+Your WordPress installation must be publicly accessible for nanoPost to work. We verify your site ownership via callback, which requires the API to reach your site.
+
+**For local development**, use a tunneling service like [ngrok](https://ngrok.com), [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/), or [Expose](https://expose.dev) to make your local site accessible. Once you deploy to production, the plugin will automatically detect the domain change and prompt you to update.
+
 ### Does this work with multisite?
 
 Per-site activation is supported. Network-wide activation is not currently supported - please activate the plugin on each subsite individually.
