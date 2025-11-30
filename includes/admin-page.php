@@ -140,111 +140,209 @@ function nanopost_settings_page() {
     $site_id = get_option('nanopost_site_id', '');
     $registered_domain = get_option('nanopost_registered_domain', '');
     $is_welcome = isset($_GET['welcome']) && sanitize_text_field($_GET['welcome']) === '1';
+    $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'overview';
+
+    // Default to test tab on welcome
+    if ($is_welcome && !isset($_GET['tab'])) {
+        $active_tab = 'test';
+    }
     ?>
     <div class="wrap">
-        <h1>nanoPost Settings</h1>
+        <h1>nanoPost</h1>
 
         <?php if ($is_welcome && $site_token): ?>
         <div class="notice notice-success" style="padding: 15px; border-left-color: #00a32a;">
             <h2 style="margin-top: 0;">Welcome to nanoPost!</h2>
             <p>Your site is now connected and ready to send emails. All WordPress system emails will automatically be delivered through nanoPost.</p>
-            <p>
-                <strong>Sending domain:</strong> <code><?php echo esc_html($registered_domain ?: site_url()); ?></code><br>
-                <strong>Site ID:</strong> <code><?php echo esc_html($site_id); ?></code>
-            </p>
             <p>Try sending a test email below to verify everything is working.</p>
         </div>
         <?php elseif ($is_welcome && !$site_token): ?>
         <div class="notice notice-warning" style="padding: 15px;">
             <h2 style="margin-top: 0;">Almost there!</h2>
-            <p>Registration is still in progress. If this persists, click "Register Now" below.</p>
+            <p>Registration is still in progress. Check the Advanced tab or try re-registering.</p>
         </div>
         <?php endif; ?>
 
-        <h2>Registration Status</h2>
-        <form method="post">
-            <?php wp_nonce_field('nanopost_settings'); ?>
-            <table class="form-table">
-                <tr>
-                    <th>Status</th>
-                    <td>
-                        <?php if ($site_token): ?>
-                            <span style="color: green; font-weight: bold;">Registered</span>
-                        <?php else: ?>
-                            <span style="color: red; font-weight: bold;">Not registered</span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <?php if ($site_id): ?>
-                <tr>
-                    <th>Site ID</th>
-                    <td><code><?php echo esc_html($site_id); ?></code></td>
-                </tr>
-                <?php endif; ?>
-                <?php if ($registered_domain): ?>
-                <tr>
-                    <th>Registered Domain</th>
-                    <td>
-                        <code><?php echo esc_html($registered_domain); ?></code>
-                        <?php if ($registered_domain !== site_url()): ?>
-                            <span style="color: orange; margin-left: 10px;">
-                                ⚠️ Current: <code><?php echo esc_html(site_url()); ?></code>
-                            </span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <?php endif; ?>
-                <tr>
-                    <th></th>
-                    <td>
-                        <input type="submit" name="nanopost_register" class="button"
-                               value="<?php echo $site_token ? 'Re-register' : 'Register Now'; ?>">
-                        <p class="description">
-                            <?php echo $site_token ? 'Generate a new token (invalidates old one)' : 'Connect this site to nanoPost'; ?>
-                        </p>
-                    </td>
-                </tr>
-            </table>
-        </form>
+        <nav class="nav-tab-wrapper">
+            <a href="<?php echo esc_url(admin_url('options-general.php?page=nanopost&tab=overview')); ?>"
+               class="nav-tab <?php echo $active_tab === 'overview' ? 'nav-tab-active' : ''; ?>">Overview</a>
+            <a href="<?php echo esc_url(admin_url('options-general.php?page=nanopost&tab=test')); ?>"
+               class="nav-tab <?php echo $active_tab === 'test' ? 'nav-tab-active' : ''; ?>">Test Email</a>
+            <a href="<?php echo esc_url(admin_url('options-general.php?page=nanopost&tab=advanced')); ?>"
+               class="nav-tab <?php echo $active_tab === 'advanced' ? 'nav-tab-active' : ''; ?>">Advanced</a>
+        </nav>
 
-        <h2>Test Email</h2>
-        <form method="post">
-            <?php wp_nonce_field('nanopost_settings'); ?>
-            <table class="form-table">
-                <tr>
-                    <th><label for="nanopost_test_email">Send To</label></th>
-                    <td>
-                        <input type="email" id="nanopost_test_email" name="nanopost_test_email"
-                               placeholder="your@email.com" class="regular-text">
-                        <input type="submit" name="nanopost_test" class="button" value="Send Test Email">
-                    </td>
-                </tr>
-            </table>
-        </form>
-
-        <h2>Debug Settings</h2>
-        <form method="post">
-            <?php wp_nonce_field('nanopost_settings'); ?>
-            <table class="form-table">
-                <tr>
-                    <th><label for="nanopost_debug_mode">Debug Mode</label></th>
-                    <td>
-                        <label>
-                            <input type="checkbox" id="nanopost_debug_mode" name="nanopost_debug_mode"
-                                   <?php checked(get_option('nanopost_debug_mode', false)); ?>>
-                            Enable debug logging
-                        </label>
-                        <p class="description">
-                            Writes detailed trace messages to the PHP error log. Useful for troubleshooting.
-                        </p>
-                    </td>
-                </tr>
-            </table>
-            <p class="submit">
-                <input type="submit" name="nanopost_save_settings" class="button button-primary" value="Save Settings">
-            </p>
-        </form>
+        <div class="tab-content" style="padding-top: 20px;">
+            <?php
+            switch ($active_tab) {
+                case 'test':
+                    nanopost_render_test_tab();
+                    break;
+                case 'advanced':
+                    nanopost_render_advanced_tab($site_token, $site_id, $registered_domain);
+                    break;
+                default:
+                    nanopost_render_overview_tab($site_token);
+                    break;
+            }
+            ?>
+        </div>
     </div>
+    <?php
+}
+
+/**
+ * Render the Overview tab.
+ */
+function nanopost_render_overview_tab($site_token) {
+    $sender_name = get_bloginfo('name');
+    $from_address = nanopost_get_from_address();
+    ?>
+    <div style="max-width: 600px;">
+        <h2>Zero-config email delivery for WordPress</h2>
+        <p style="font-size: 14px; line-height: 1.6;">
+            nanoPost handles all your WordPress emails automatically. No SMTP credentials to configure,
+            no API keys to manage. Just activate and your emails start flowing through our reliable infrastructure.
+        </p>
+
+        <h3>How it works</h3>
+        <ol style="font-size: 14px; line-height: 1.8;">
+            <li>Your site registered automatically when you activated the plugin</li>
+            <li>All <code>wp_mail()</code> calls are routed through nanoPost</li>
+            <li>We deliver your emails reliably via our SMTP infrastructure</li>
+        </ol>
+
+        <?php if ($site_token): ?>
+        <p style="margin-top: 20px;">
+            <span style="color: green; font-size: 16px;">&#10003;</span>
+            <strong>Connected</strong> &mdash; Your site is registered and ready to send emails.
+        </p>
+
+        <h3>Sender Details</h3>
+        <table class="form-table" style="margin-top: 0;">
+            <tr>
+                <th style="width: 120px; padding: 10px 10px 10px 0;">From Name</th>
+                <td style="padding: 10px 0;"><code><?php echo esc_html($sender_name); ?></code></td>
+            </tr>
+            <tr>
+                <th style="padding: 10px 10px 10px 0;">From Address</th>
+                <td style="padding: 10px 0;"><code><?php echo esc_html($from_address); ?></code></td>
+            </tr>
+        </table>
+        <?php else: ?>
+        <p style="margin-top: 20px;">
+            <span style="color: red; font-size: 16px;">&#10007;</span>
+            <strong>Not connected</strong> &mdash; Registration may still be in progress.
+        </p>
+        <p>
+            <a href="<?php echo esc_url(admin_url('options-general.php?page=nanopost&tab=advanced')); ?>" class="button">
+                Check Advanced Settings
+            </a>
+        </p>
+        <?php endif; ?>
+    </div>
+    <?php
+}
+
+/**
+ * Render the Test Email tab.
+ */
+function nanopost_render_test_tab() {
+    ?>
+    <h2>Send Test Email</h2>
+    <p>Verify that emails are being delivered correctly by sending a test message.</p>
+
+    <form method="post">
+        <?php wp_nonce_field('nanopost_settings'); ?>
+        <table class="form-table">
+            <tr>
+                <th><label for="nanopost_test_email">Recipient</label></th>
+                <td>
+                    <input type="email" id="nanopost_test_email" name="nanopost_test_email"
+                           value="<?php echo esc_attr(get_option('admin_email')); ?>"
+                           class="regular-text" required>
+                    <p class="description">Email address to send the test message to.</p>
+                </td>
+            </tr>
+        </table>
+        <p class="submit">
+            <input type="submit" name="nanopost_test" class="button button-primary" value="Send Test Email">
+        </p>
+    </form>
+    <?php
+}
+
+/**
+ * Render the Advanced tab.
+ */
+function nanopost_render_advanced_tab($site_token, $site_id, $registered_domain) {
+    ?>
+    <h2>Registration Status</h2>
+    <table class="form-table">
+        <tr>
+            <th>Status</th>
+            <td>
+                <?php if ($site_token): ?>
+                    <span style="color: green; font-weight: bold;">&#10003; Registered</span>
+                <?php else: ?>
+                    <span style="color: red; font-weight: bold;">&#10007; Not registered</span>
+                <?php endif; ?>
+            </td>
+        </tr>
+        <?php if ($registered_domain): ?>
+        <tr>
+            <th>Sending Domain</th>
+            <td>
+                <code><?php echo esc_html($registered_domain); ?></code>
+                <?php if ($registered_domain !== site_url()): ?>
+                    <span style="color: orange; margin-left: 10px;">
+                        &#9888; Current site URL: <code><?php echo esc_html(site_url()); ?></code>
+                    </span>
+                <?php endif; ?>
+            </td>
+        </tr>
+        <?php endif; ?>
+        <?php if ($site_id): ?>
+        <tr>
+            <th>Site ID</th>
+            <td><code><?php echo esc_html($site_id); ?></code></td>
+        </tr>
+        <?php endif; ?>
+    </table>
+
+    <form method="post" style="margin-top: 10px;">
+        <?php wp_nonce_field('nanopost_settings'); ?>
+        <input type="submit" name="nanopost_register" class="button"
+               value="<?php echo $site_token ? 'Re-register Site' : 'Register Now'; ?>">
+        <p class="description">
+            <?php echo $site_token ? 'Generate a new token (invalidates the old one).' : 'Connect this site to nanoPost.'; ?>
+        </p>
+    </form>
+
+    <hr style="margin: 30px 0;">
+
+    <h2>Debug Settings</h2>
+    <form method="post">
+        <?php wp_nonce_field('nanopost_settings'); ?>
+        <table class="form-table">
+            <tr>
+                <th><label for="nanopost_debug_mode">Debug Mode</label></th>
+                <td>
+                    <label>
+                        <input type="checkbox" id="nanopost_debug_mode" name="nanopost_debug_mode"
+                               <?php checked(get_option('nanopost_debug_mode', false)); ?>>
+                        Enable debug logging
+                    </label>
+                    <p class="description">
+                        Writes detailed trace messages to the PHP error log. Useful for troubleshooting.
+                    </p>
+                </td>
+            </tr>
+        </table>
+        <p class="submit">
+            <input type="submit" name="nanopost_save_settings" class="button button-primary" value="Save Settings">
+        </p>
+    </form>
     <?php
 }
 

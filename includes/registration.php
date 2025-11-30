@@ -97,6 +97,9 @@ function nanopost_register_site($regenerate_secret = false) {
         update_option('nanopost_site_id', $body['site_id']);
         update_option('nanopost_api_url', NANOPOST_API_BASE . '/mail');
         update_option('nanopost_registered_domain', site_url());
+        if (!empty($body['from_address'])) {
+            update_option('nanopost_from_address', $body['from_address']);
+        }
 
         nanopost_debug("New site_id: {$body['site_id']}");
         nanopost_debug("New site_token: " . substr($body['site_token'], 0, 10) . "...");
