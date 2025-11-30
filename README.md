@@ -161,11 +161,6 @@ Yes! The free tier includes generous email limits suitable for most small sites.
 - Added support for multisite subdirectory installs
 - Added FAQ about local development requirements
 
-### 0.7.0
-- Added welcome banner on activation
-- Added `--verify` flag for round-trip API verification
-- Improved admin page UX
-
 For older versions, see [changelog.txt](changelog.txt).
 
 ## License
