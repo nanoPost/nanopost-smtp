@@ -3,7 +3,7 @@
  * Plugin Name: nanoPost SMTP
  * Plugin URI: https://nanopo.st
  * Description: Zero-config email delivery for WordPress
- * Version: 0.7.0
+ * Version: 0.8.0
  * Author: nanoPost
  * Author URI: https://nanopo.st
  * Text Domain: nanopost-smtp
@@ -12,7 +12,7 @@
 defined('ABSPATH') || exit;
 
 // Plugin constants
-define('NANOPOST_VERSION', '0.7.0');
+define('NANOPOST_VERSION', '0.8.0');
 define('NANOPOST_PLUGIN_DIR', __DIR__);
 
 // API base - can be overridden in wp-config.php for staging/dev

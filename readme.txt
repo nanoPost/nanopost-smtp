@@ -3,7 +3,7 @@ Contributors: nanopost
 Tags: smtp, email, mail, wp_mail, email delivery
 Requires at least: 5.0
 Tested up to: 6.7
-Stable tag: 0.7.0
+Stable tag: 0.8.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -69,6 +69,10 @@ Yes! The free tier includes generous email limits suitable for most small sites.
 
 == Changelog ==
 
+= 0.8.0 =
+* Added support for multisite subdirectory installs
+* Added FAQ about local development requirements
+
 = 0.7.0 =
 * Added welcome banner on activation
 * Added --verify flag for round-trip API verification
@@ -77,6 +81,9 @@ Yes! The free tier includes generous email limits suitable for most small sites.
 For older versions, see [changelog.txt](https://plugins.svn.wordpress.org/nanopost-smtp/trunk/changelog.txt).
 
 == Upgrade Notice ==
+
+= 0.8.0 =
+Adds support for WordPress multisite subdirectory installs.
 
 = 0.7.0 =
 Improved activation experience with welcome banner.
