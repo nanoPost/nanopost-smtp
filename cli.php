@@ -34,14 +34,16 @@ class NanoPost_CLI {
         $site_token = get_option('nanopost_site_token');
         $site_secret = get_option('nanopost_site_secret');
         $debug_mode = get_option('nanopost_debug_mode', false);
+        $from_address = nanopost_get_from_address();
 
         WP_CLI::log('nanoPost Status');
         WP_CLI::log('---------------');
-        WP_CLI::log('Site ID:     ' . ($site_id ?: '(not registered)'));
-        WP_CLI::log('Site Token:  ' . ($site_token ? substr($site_token, 0, 12) . '...' : '(not registered)'));
-        WP_CLI::log('Site Secret: ' . ($site_secret ? substr($site_secret, 0, 12) . '...' : '(not set)'));
-        WP_CLI::log('Debug Mode:  ' . ($debug_mode ? 'enabled' : 'disabled'));
-        WP_CLI::log('API Base:    ' . NANOPOST_API_BASE);
+        WP_CLI::log('Site ID:      ' . ($site_id ?: '(not registered)'));
+        WP_CLI::log('Site Token:   ' . ($site_token ? substr($site_token, 0, 12) . '...' : '(not registered)'));
+        WP_CLI::log('Site Secret:  ' . ($site_secret ? substr($site_secret, 0, 12) . '...' : '(not set)'));
+        WP_CLI::log('From Address: ' . $from_address);
+        WP_CLI::log('Debug Mode:   ' . ($debug_mode ? 'enabled' : 'disabled'));
+        WP_CLI::log('API Base:     ' . NANOPOST_API_BASE);
 
         if ($site_id && $site_token) {
             WP_CLI::success('Plugin is registered.');
