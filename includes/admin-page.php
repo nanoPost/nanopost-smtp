@@ -238,20 +238,12 @@ function nanopost_handle_settings_form() {
     // Send test email if requested
     if (isset($_POST['nanopost_test']) && !empty($_POST['nanopost_test_email'])) {
         $test_to = sanitize_email($_POST['nanopost_test_email']);
+        $result = nanopost_send_test_email($test_to);
 
-        nanopost_debug("=== TEST EMAIL START ===");
-        nanopost_debug("Recipient: {$test_to}");
-        nanopost_debug("Site token configured: " . (get_option('nanopost_site_token') ? 'yes' : 'NO'));
-        nanopost_debug("API URL: " . get_option('nanopost_api_url', '(not set)'));
-
-        $result = wp_mail($test_to, 'nanoPost Test', 'This is a test email from nanoPost.');
-
-        if ($result) {
-            nanopost_debug("=== TEST EMAIL SUCCESS ===");
+        if ($result['success']) {
             echo '<div class="notice notice-success"><p>Test email sent to ' . esc_html($test_to) . '</p></div>';
         } else {
-            nanopost_debug("=== TEST EMAIL FAILED ===");
-            echo '<div class="notice notice-error"><p>Failed to send test email. Check error log.</p></div>';
+            echo '<div class="notice notice-error"><p>Failed to send test email: ' . esc_html($result['error']) . '</p></div>';
         }
     }
 

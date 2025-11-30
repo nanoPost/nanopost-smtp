@@ -6,6 +6,44 @@
 defined('ABSPATH') || exit;
 
 /**
+ * Send a test email via nanoPost.
+ *
+ * @param string $to      Recipient email address.
+ * @param string $subject Email subject (optional).
+ * @param string $message Email body (optional).
+ * @return array Result with 'success' boolean and 'error' key on failure.
+ */
+function nanopost_send_test_email($to, $subject = null, $message = null) {
+    $subject = $subject ?? 'nanoPost Test Email';
+    $message = $message ?? 'This is a test email sent via nanoPost at ' . date('Y-m-d H:i:s');
+
+    if (!get_option('nanopost_site_token')) {
+        return [
+            'success' => false,
+            'error' => 'Not registered',
+        ];
+    }
+
+    nanopost_debug("=== TEST EMAIL START ===");
+    nanopost_debug("Recipient: {$to}");
+    nanopost_debug("Site token configured: yes");
+    nanopost_debug("API URL: " . get_option('nanopost_api_url', NANOPOST_API_BASE . '/mail'));
+
+    $result = wp_mail($to, $subject, $message);
+
+    if ($result) {
+        nanopost_debug("=== TEST EMAIL SUCCESS ===");
+        return ['success' => true];
+    }
+
+    nanopost_debug("=== TEST EMAIL FAILED ===");
+    return [
+        'success' => false,
+        'error' => 'wp_mail() returned false',
+    ];
+}
+
+/**
  * Parse wp_mail headers (string or array) into associative array.
  */
 function nanopost_parse_headers($headers) {

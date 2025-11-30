@@ -111,29 +111,23 @@ class NanoPost_CLI {
         }
 
         $email = $args[0];
-        $subject = WP_CLI\Utils\get_flag_value($assoc_args, 'subject', 'nanoPost Test Email');
-        $message = WP_CLI\Utils\get_flag_value($assoc_args, 'message', 'This is a test email sent via nanoPost at ' . date('Y-m-d H:i:s'));
+        $subject = WP_CLI\Utils\get_flag_value($assoc_args, 'subject', null);
+        $message = WP_CLI\Utils\get_flag_value($assoc_args, 'message', null);
 
         if (!is_email($email)) {
             WP_CLI::error('Invalid email address: ' . $email);
             return;
         }
 
-        $site_token = get_option('nanopost_site_token');
-        if (!$site_token) {
-            WP_CLI::error('Not registered. Run: wp nanopost register');
-            return;
-        }
-
         WP_CLI::log('Sending test email to: ' . $email);
-        WP_CLI::log('Subject: ' . $subject);
+        WP_CLI::log('Subject: ' . ($subject ?? 'nanoPost Test Email'));
 
-        $result = wp_mail($email, $subject, $message);
+        $result = nanopost_send_test_email($email, $subject, $message);
 
-        if ($result) {
+        if ($result['success']) {
             WP_CLI::success('Email sent successfully.');
         } else {
-            WP_CLI::error('Email sending failed. Check debug log for details.');
+            WP_CLI::error('Email sending failed: ' . $result['error']);
         }
     }
 
